@@ -40,23 +40,27 @@ snit::type yatt_tcl {
                 # just ignore
             } elseif {[regexp {^<!\w+((?::\w+)+) ([^>]+)} $declOrCmmt \
                            --> declType attList]} {
+                # XXX: <!yatt:args>
                 switch $declType {
                     :args {
-                        set curPartName [list page ""]
+                        set declKind page
+                        set curPartName [list $declKind ""]
                     }
                     :page - :action {
+                        set declKind [string range $declType 1 end]
                         set attArgs [lassign $attList partName]
-                        set curPartName [list [string range $declType 1 end] $partType]
+                        set curPartName [list $declKind $partName]
                     }
                     default {
                         error "Unknown decltype $declType"
                     }
                 }
                 dict update result $curPartName curPart {
-                    dict lappend curPart decl [list $declType {*}$attList]
+                    dict set curPart kind $declKind
+                    dict set curPart atts $attList
                 }
-            } else {
-                error "Really?"
+            } elseif {$declOrCmmt ne ""} {
+                error "Really? $declOrCmmt"
             }
         }
         set result
