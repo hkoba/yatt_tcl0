@@ -31,31 +31,47 @@ snit::type yatt_tcl {
         foreach partSpec [dict keys $declDict] {
             lassign $partSpec kind partName
             append script [$self transpile-$kind $partName \
-                               [dict get $declDict $partSpec] $otherDecls]
+                               [dict get $declDict $partSpec] \
+                               $declDict $otherDecls]
         }
         set script
     }
 
-    method transpile-page {partName declRec otherDecls} {
-        $self transpile-widget $partName $declRec $otherDecls
+    method transpile-page {partName declRec fileDecl otherDecls} {
+        $self transpile-widget $partName $declRec $fileDecl $otherDecls
     }
-    method transpile-widget {partName declRec otherDecls} {
+    method transpile-widget {partName declRec fileDecl otherDecls} {
         set scriptBody []
-        foreach {text tok} [$self parse-body [dict get $declRec source]] {
-            if {$text ne ""} {
-                lappend scriptBody [list CON write $text]
-            }
-            if {[regexp {^&\w+:(\w+);} $tok -> varName]} {
-                lappend scriptBody [string map [list @VAR@ $varName] {CON write [escape $@VAR@]}]
-            } elseif {[regexp {^<\?\w+\s(.*?)\?>$} $tok -> pi]} {
-                lappend scriptBody $pi
-            } else {
-                lappend scriptBody "(($tok))"
-            }
+        foreach tok [$self parse-body [dict get $declRec source]] {
+            lappend scriptBody [$self generate $tok]
         }
-        return ";proc render__$partName {[list CON {*}[dict get $declRec atts]]} {[join $scriptBody \;]}"
+        return "; proc render__$partName {[list this CON {*}[dict get $declRec atts]]} {[join $scriptBody {; }]}"
     }
-    method transpile-action {partName declRec otherDecls} {}
+    method transpile-action {partName declRec fileDecl otherDecls} {}
+
+    method generate tok {
+        $self generate-[lindex $tok 0] $tok
+    }
+    method generate-text tok {
+        set text [lindex $tok 1]
+        return "\$CON write [list $text]"
+    }
+    method generate-pi tok {
+        lindex $tok 1
+    }
+    method generate-entity tok {
+        # XXX: entpath is not yet supported
+        set varName [regsub ^: [lindex $tok 1] {}]
+        string map [list @VAR@ $varName] {$CON write [escape $@VAR@]}
+    }
+    method generate-call tok {
+        # XXX: body is not yet used
+        # XXX: $this is passed
+        lassign $tok _ tag_and_args body
+        set args [lassign $tag_and_args tag]
+        regsub {^\w+:} $tag {} tag
+        string map [list @TAG@ $tag @ARGS@ $args] {@TAG@ @ARGS@}
+    }
 
     method {re body} {} {
         set reNS [join $options(-namespace-list) |]
@@ -70,8 +86,57 @@ snit::type yatt_tcl {
               )
         }
     }
-    method parse-body html {
-        textutil::splitx $html [$self re body]
+    method parse-body source {
+        set tokList [$self tokenize-body $source]
+        $self organize-body tokList
+    }
+    method organize-body {tokListVar {outerTag ""}} {
+        upvar 1 $tokListVar tokList
+        set result []
+        while {[llength $tokList]} {
+            set tokList [lassign $tokList tok]
+            switch [lindex $tok 0] {
+                text - entity - pi {
+                    lappend result $tok
+                }
+                tag {
+                    set tagSpec [lindex $tok 1]
+                    if {[regsub ^/ [lindex $tagSpec 0] {} tag]} {
+                        if {$tag ne $outerTag} {
+                            error "Tag $outerTag is closed by $tag"
+                        }
+                        break
+                    } elseif {[regsub {/$} $tagSpec {} tagSpec]} {
+                        # <yatt:foo />
+                        lappend result [list call $tagSpec]
+                    } else {
+                        # <yatt:foo> ... </yatt:foo>
+                        lappend result [list call $tagSpec [$self organize-body tokList [lindex $tagSpec 0]]]
+                    }
+                }
+            }
+        }
+        set result
+    }
+    method tokenize-body html {
+        set result []
+        foreach {text tok} [textutil::splitx $html [$self re body]] {
+            if {$text ne ""} {
+                lappend result [list text $text]
+            }
+            if {$tok eq ""} {
+                ; # nop
+            } elseif {[regsub {^&\w+} $tok {} tok]} {
+                lappend result [list entity [regsub {;$} $tok {}]]
+            } elseif {[regsub {^<\?\w+} $tok {} tok]} {
+                lappend result [list pi [regsub {\?>$} $tok {}]]
+            } elseif {[regsub {^<} $tok {} tok]} {
+                lappend result [list tag [regsub {>$} $tok {}]]
+            } else {
+                error "Unknown token $tok"
+            }
+        }
+        set result
     }
 
     method {re decls} {} {
