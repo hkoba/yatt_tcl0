@@ -6,6 +6,7 @@ package require textutil
 
 snit::type yatt_tcl {
     option -doc-root
+    option -namespace-list [list yatt tcl]
     
     variable myMtime -array []
     
@@ -18,22 +19,38 @@ snit::type yatt_tcl {
 
     }
     
-    option -namespace-list [list yatt tcl]
-    method {re decls} {} {
+    method {re body} {} {
         set reNS [join $options(-namespace-list) |]
-        string map [list @NS@ $reNS] {(?x)
-            (<!(?:@NS@):[^>]+>\n
+        string map [list @NS@ (?:$reNS)] {(?x)
+            ((?: & @NS@ :
+              [\w\-\.:\(\$\)\[\]]+
+              ;)
             |
-             <!--\#(?:@NS@).*?-->)
+              <(?: \? @NS@  [^\?\>]* \?
+                | /?  @NS@ (?:(?::\w+)+) [^>]*
+                )>
+              )
         }
     }
-    method parse-decl html {
+    method parse-body html {
+        textutil::splitx $html [$self re body]
+    }
+
+    method {re decls} {} {
+        set reNS [join $options(-namespace-list) |]
+        string map [list @NS@ (?:$reNS)] {(?x)
+            (<! @NS@ :[^>]+>\n
+            |
+             <!--\# @NS@ .*?-->)
+        }
+    }
+    method parse-decllist html {
         set result [dict create]
         set curPartName [list page ""]
         foreach {text declOrCmmt} [textutil::splitx $html [$self re decls]] {
             if {$text ne ""} {
                 dict update result $curPartName curPart {
-                    dict lappend curPart source [list text $text]
+                    dict append curPart source $text
                 }
             }
             if {[regexp ^<!-- $declOrCmmt]} {
@@ -46,7 +63,7 @@ snit::type yatt_tcl {
                         set declKind page
                         set curPartName [list $declKind ""]
                     }
-                    :page - :action {
+                    :page - :widget - :action {
                         set declKind [string range $declType 1 end]
                         set attArgs [lassign $attList partName]
                         set curPartName [list $declKind $partName]
