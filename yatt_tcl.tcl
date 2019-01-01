@@ -47,6 +47,8 @@ snit::type yatt_tcl {
             }
             if {[regexp {^&\w+:(\w+);} $tok -> varName]} {
                 lappend scriptBody [string map [list @VAR@ $varName] {CON write [escape $@VAR@]}]
+            } elseif {[regexp {^<\?\w+\s(.*?)\?>$} $tok -> pi]} {
+                lappend scriptBody $pi
             } else {
                 lappend scriptBody "(($tok))"
             }
