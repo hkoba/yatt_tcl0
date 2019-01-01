@@ -38,7 +38,7 @@ snit::type yatt_tcl {
             }
             if {[regexp ^<!-- $declOrCmmt]} {
                 # just ignore
-            } elseif {[regexp {^<!\w+((?::\w+}+) ([^>]+)} $declOrCmmt \
+            } elseif {[regexp {^<!\w+((?::\w+)+) ([^>]+)} $declOrCmmt \
                            --> declType attList]} {
                 switch $declType {
                     :args {
