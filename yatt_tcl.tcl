@@ -21,8 +21,7 @@ snit::type yatt_tcl {
     option -namespace-list [list yatt tcl]
     method {re decls} {} {
         set reNS [join $options(-namespace-list) |]
-        string map [list @NS@ $reNS] {
-            (?x)
+        string map [list @NS@ $reNS] {(?x)
             (<!(?:@NS@):[^>]+>\n
             |
              <!--\#(?:@NS@).*?-->)
