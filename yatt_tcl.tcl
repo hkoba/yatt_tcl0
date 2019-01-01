@@ -28,7 +28,38 @@ snit::type yatt_tcl {
         }
     }
     method parse-decl html {
-        textutil::splitx $html [$self re decls]
+        set result [dict create]
+        set curPartName [list page ""]
+        foreach {text declOrCmmt} [textutil::splitx $html [$self re decls]] {
+            if {$text ne ""} {
+                dict update result $curPartName curPart {
+                    dict lappend curPart source [list text $text]
+                }
+            }
+            if {[regexp ^<!-- $declOrCmmt]} {
+                # just ignore
+            } elseif {[regexp {^<!\w+((?::\w+}+) ([^>]+)} $declOrCmmt \
+                           --> declType attList]} {
+                switch $declType {
+                    :args {
+                        set curPartName [list page ""]
+                    }
+                    :page - :action {
+                        set attArgs [lassign $attList partName]
+                        set curPartName [list [string range $declType 1 end] $partType]
+                    }
+                    default {
+                        error "Unknown decltype $declType"
+                    }
+                }
+                dict update result $curPartName curPart {
+                    dict lappend curPart decl [list $declType {*}$attList]
+                }
+            } else {
+                error "Really?"
+            }
+        }
+        set result
     }
     
     option -encoding utf-8
