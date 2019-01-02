@@ -57,7 +57,7 @@ snit::type yatt_tcl {
         }
         
 
-        set widgetProc [dict get $widgetSpec namespace]::[dict get $widgetSpec proc]
+        set widgetProc [dict get $widgetSpec proc]
         $widgetProc $CON {*}[$self gen-actual-callargs $callArgs]
     }
     
@@ -102,8 +102,9 @@ snit::type yatt_tcl {
             return 0
         }
 
-        set declDict [$self parse-decllist [$self read_file $fn]]
         set fileNS [join [list $options(-tcl-namespace) $tmplName] ::]
+        set declDict [$self parse-decllist [$self read_file $fn] \
+                          ${fileNS}::]
 
         dict set myCompileCache $tmplName \
             [dict create \
@@ -168,10 +169,11 @@ snit::type yatt_tcl {
     method {transcontext find-widget} {transCtx widgetName} {
         # XXX: widgetPath (yatt:foo:bar)
         set partSpec [list widget $widgetName]
-        if {[dict exists $transCtx container $partSpec]} {
+        if {![regexp : $widgetName]
+            && [dict exists $transCtx container $partSpec]} {
             return [dict get $transCtx container $partSpec]
         } else {
-            # XXX: other file
+            $self find-widget-spec $widgetName
         }
     }
 
@@ -226,11 +228,11 @@ snit::type yatt_tcl {
     method generate-call {tok transCtx} {
         lassign $tok _ tag_and_args bodyToks
         set actualArgs [lassign $tag_and_args widgetName]
-        regsub {^\w+:} $widgetName {} widgetName
         
         if {[set codeVar [$self transcontext find-callable-var $transCtx $widgetName]] ne ""} {
             return "uplevel 1 \$[dict get $codeVar name]"
         } elseif {[set widgetDecl [$self transcontext find-widget $transCtx $widgetName]] ne ""} {
+            $self debugLevel 2 "call [list $tok] resolved to [list $widgetDecl]"
             set callArgs [dict get $widgetDecl atts]
             foreach argTok $actualArgs {
                 if {[llength $argTok] == 2} {
@@ -261,7 +263,7 @@ snit::type yatt_tcl {
             }
 
             set argList [$self gen-actual-callargs $callArgs]
-            return "render__$widgetName \$CON [join $argList]"
+            return "[dict get $widgetDecl proc] \$CON [join $argList]"
         } else {
             error "No such widget: $widgetName. ctx=($transCtx)"
         }
@@ -329,7 +331,7 @@ snit::type yatt_tcl {
 
                         set attList [$self parse-attlist $rawAtts]
                         # Drop yatt: first.
-                        set tagPath [lrange [split $tagName :] 1 end]
+                        regsub {^\w+:} $tagName {} tagPath
 
                         set callTok [list call [list $tagPath {*}$attList]]
                         
@@ -409,7 +411,7 @@ snit::type yatt_tcl {
              <!--\# @NS@ .*?-->)
         }
     }
-    method parse-decllist html {
+    method parse-decllist {html {nsPrefix ""}} {
         set result [dict create]
         set curPartName [list widget ""]
         set otherSpec [list public yes]
@@ -448,7 +450,7 @@ snit::type yatt_tcl {
                 }
                 dict update result $curPartName curPart {
                     dict set curPart kind $declKind
-                    dict set curPart proc $procPrefix[lindex $curPartName end]
+                    dict set curPart proc $nsPrefix$procPrefix[lindex $curPartName end]
                     dict set curPart atts \
                         [$self build-arg-decls $attList]
                     foreach {k v} $otherSpec {
