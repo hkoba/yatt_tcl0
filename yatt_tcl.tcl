@@ -26,28 +26,28 @@ snit::type yatt_tcl {
         $self transpile $declDict
     }
 
-    method transpile {declDict {otherDecls ""}} {
+    method transpile {declDict} {
         set script []
         foreach partSpec [dict keys $declDict] {
             lassign $partSpec kind partName
             append script [$self transpile-$kind $partName \
                                [dict get $declDict $partSpec] \
-                               $declDict $otherDecls]
+                               $declDict]
         }
         set script
     }
 
-    method transpile-page {partName declRec fileDecl otherDecls} {
-        $self transpile-widget $partName $declRec $fileDecl $otherDecls
+    method transpile-page {partName declRec fileDecl} {
+        $self transpile-widget $partName $declRec $fileDecl
     }
-    method transpile-widget {partName declRec fileDecl otherDecls} {
+    method transpile-widget {partName declRec fileDecl} {
         set scriptBody []
         foreach tok [$self parse-body [dict get $declRec source]] {
             lappend scriptBody [$self generate $tok]
         }
-        return "; proc render__$partName {[list this CON {*}[dict get $declRec atts]]} {[join $scriptBody {; }]}"
+        return "; proc render__$partName {[list CON {*}[dict get $declRec atts]]} {[join $scriptBody {; }]}"
     }
-    method transpile-action {partName declRec fileDecl otherDecls} {}
+    method transpile-action {partName declRec fileDecl} {}
 
     method generate tok {
         $self generate-[lindex $tok 0] $tok
