@@ -129,9 +129,23 @@ snit::type yatt_tcl {
         # XXX: body is not yet used
         # XXX: $this is passed
         lassign $tok _ tag_and_args body
-        set args [lassign $tag_and_args tag]
-        regsub {^\w+:} $tag {} tag
-        string map [list @TAG@ $tag @ARGS@ $args] {@TAG@ @ARGS@}
+        set actualArgs [lassign $tag_and_args widgetName]
+        regsub {^\w+:} $widgetName {} widgetName
+        
+        if {[set codeVar [$self transcontext find-callable-var $transCtx $widgetName]] ne ""} {
+            list uplevel 1 \$$codeVar
+        } elseif {[set widgetDecl [$self transcontext find-widget $transCtx $widgetName]] ne ""} {
+            set formalArgs [dict get $widgetDecl atts]
+            set cmd [list render__$widgetName]
+            foreach argName [dict keys $formalArgs] {
+                set argSpec [dict get $formalArgs $argName]
+                
+            }
+            set cmd
+            list render__$widgetName $formalArgs $actualArgs
+        } else {
+            error "No such widget: $widgetName. ctx=($transCtx)"
+        }
     }
 
     method gen-emittable-text string {
