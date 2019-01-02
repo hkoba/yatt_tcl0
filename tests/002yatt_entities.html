@@ -26,10 +26,11 @@
   </yatt:qux>
 </yatt:baz>
 
-<!yatt:widget baz x y z>
+<!yatt:widget baz x y="?xxx" z>
 <h2>baz</h2>
-
+x=&yatt:x;
 <yatt:body/>
+y=&yatt:y;
 
 <!yatt:widget qux x>
 <h2>qux &yatt:x;</h2>

@@ -49,7 +49,7 @@ snit::type yatt_tcl {
         
         set callArgs [dict get $widgetSpec atts]
         foreach argName [dict keys $argDict] {
-            if {![dict exists $callArgs]} {
+            if {![dict exists $callArgs $argName]} {
                 error "Unknown argument! $argName"
             }
             dict set callArgs $argName actual \
@@ -276,7 +276,7 @@ snit::type yatt_tcl {
             } elseif {[dict get $argSpec dflag] eq "!"} {
                 error "Argument [dict get $argSpec name] is missing!"
             } else {
-                value {}
+                dict get $argSpec default
             }
         }
     }
