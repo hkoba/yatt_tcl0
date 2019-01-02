@@ -45,7 +45,22 @@ snit::type yatt_tcl {
         foreach tok [$self parse-body [dict get $declRec source]] {
             lappend scriptBody [$self generate $tok]
         }
-        return "; proc render__$partName {[list CON {*}[dict get $declRec atts]]} {[join $scriptBody {; }]}"
+        set argList [list CON]
+        set argDict [dict get $declRec atts]
+        set hasDefault []
+        foreach argName [dict keys $argDict] {
+            set argSpec [dict get $argDict $argName]
+            if {[set dflag [dict get $argSpec dflag]] ne "!"} {
+                lappend hasDefault $argName
+                lappend argList [list $argName [dict get $argSpec default]]
+            } else {
+                if {[llength $hasDefault]} {
+                    error "Mandatory argument $argName is declared after [lindex $hasDefault end] which has default value!"
+                }
+                lappend argList $argName
+            }
+        }
+        return "; proc render__$partName [list $argList] {[join $scriptBody {; }]}"
     }
     method transpile-action {partName declRec fileDecl} {}
 
@@ -191,7 +206,8 @@ snit::type yatt_tcl {
             if {[regexp ^<!-- $declOrCmmt]} {
                 # just ignore
             } elseif {[regexp {^<!\w+((?::\w+)+) ([^>]+)} $declOrCmmt \
-                           --> declType attList]} {
+                           --> declType rawAttList]} {
+                set attList [$self parse-attlist $rawAttList]
                 # XXX: <!yatt:args>
                 switch $declType {
                     :args {
@@ -213,7 +229,7 @@ snit::type yatt_tcl {
                 dict update result $curPartName curPart {
                     dict set curPart kind $declKind
                     dict set curPart atts \
-                        [$self build-arg-decls [$self parse-attlist $attList]]
+                        [$self build-arg-decls $attList]
                 }
             } elseif {$declOrCmmt ne ""} {
                 error "Really? $declOrCmmt"
