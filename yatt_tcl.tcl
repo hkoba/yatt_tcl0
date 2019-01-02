@@ -80,11 +80,9 @@ snit::type yatt_tcl {
     }
 
     method transpile-widget {partName declRec transCtx} {
-        set scriptBody []
         $self debugLevel 2 "partName=$partName, declRec=($declRec)"        
-        foreach tok [$self parse-body [dict get $declRec source]] {
-            lappend scriptBody [$self generate $tok $transCtx]
-        }
+        set scriptBody [$self generate $transCtx \
+                            [$self parse-body [dict get $declRec source]]]
         set argList [list CON]
         set argDict [dict get $declRec atts]
         set hasDefault []
@@ -104,8 +102,12 @@ snit::type yatt_tcl {
     }
     method transpile-action {partName declRec transCtx} {}
 
-    method generate {tok transCtx} {
-        $self generate-[lindex $tok 0] $tok $transCtx
+    method generate {transCtx tokList} {
+        set scriptList ""
+        foreach tok $tokList {
+            lappend scriptList [$self generate-[lindex $tok 0] $tok $transCtx]
+        }
+        set scriptList
     }
     method generate-text {tok transCtx} {
         set text [lindex $tok 1]
