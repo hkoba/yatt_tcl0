@@ -101,7 +101,12 @@ snit::type yatt_tcl {
     method generate-entity {tok transCtx} {
         # XXX: entpath is not yet supported
         set varName [regsub ^: [lindex $tok 1] {}]
-        string map [list @VAR@ $varName] {$CON write [escape $@VAR@]}
+        if {[set varSpec [$self transcontext lookup $transCtx $varName]] eq ""} {
+            error "No such variable: $varName ($transCtx)"
+        }
+        set expr [$self gen-emittable-[dict get $varSpec type] \
+                      \$$varName]
+        concat {$CON write } $expr
     }
     method generate-call {tok transCtx} {
         # XXX: body is not yet used
@@ -110,6 +115,10 @@ snit::type yatt_tcl {
         set args [lassign $tag_and_args tag]
         regsub {^\w+:} $tag {} tag
         string map [list @TAG@ $tag @ARGS@ $args] {@TAG@ @ARGS@}
+    }
+
+    method gen-emittable-text string {
+        string map [list @VAL@ $string] {[escape @VAL@]}
     }
 
     method {re body} {} {
