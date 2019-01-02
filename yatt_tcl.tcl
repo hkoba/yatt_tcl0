@@ -195,6 +195,52 @@ snit::type yatt_tcl {
         }
     }
 
+    # XXX: Incompatible with yatt_lite.
+    method parse-attlist string {
+        $self debugLevel 1 "orig=($string)"
+	set result {}
+	for {
+	    set start 0
+	} {$start < [string length $string] &&
+	   [regexp -expanded -indices -start $start {
+	       (?:(\w+)\s*=\s*)?
+               (?:"([^\"]*)" | '([^\']*)' | ([^\"\'\>/\s]+))
+	   } $string all name dquo quot bare]} {
+	    set start [lindex $all end]
+	    incr start
+            $self debugLevel 1 "all=([string-tuple $string $all]).next=([string range $string $start end])"
+	} {
+	    if {![lappend-nonempty-tuple result $string $name]} {
+                lappend result ""
+            }
+	    or {
+		lappend-nonempty-tuple result $string $dquo
+	    } {
+		lappend-nonempty-tuple result $string $quot
+	    } {
+		lappend-nonempty-tuple result $string $bare
+	    }
+	}
+	set result
+    }
+    proc lappend-nonempty-tuple {listVar string tuple} {
+	upvar 1 $listVar list
+	if {[lindex $tuple 0] < 0} {
+	    return 0
+	}
+	lappend list [string-tuple $string $tuple]
+	return 1
+    }
+    proc or args {
+	foreach cmd $args {
+	    if {[uplevel 1 $cmd]} break
+	}
+    }
+    proc string-tuple {string tuple} {
+	if {[lindex $tuple 0] < 0} return
+	string range $string {*}$tuple
+    }
+
     option -encoding utf-8
     
     method read_file {fn args} {
