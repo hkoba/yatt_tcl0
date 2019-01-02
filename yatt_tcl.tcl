@@ -186,6 +186,15 @@ snit::type yatt_tcl {
         set result
     }
     
+
+    option -debug 0
+    option -debug-fh stdout
+    method debugLevel {debugLevel args} {
+        if {$options(-debug) >= $debugLevel} {
+            puts $options(-debug-fh) $args
+        }
+    }
+
     option -encoding utf-8
     
     method read_file {fn args} {
