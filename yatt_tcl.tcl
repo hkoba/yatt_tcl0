@@ -139,6 +139,38 @@ snit::type yatt_tcl {
         set result
     }
 
+    method build-arg-decls attList {
+        set dict [dict create]
+        foreach nvPair $attList {
+            lassign $nvPair varName varSpec
+            if {$varName eq ""} {
+                error "Name-less attvalue is not allowed in argument list: $nvPair of [list $attList]"
+            }
+            # type
+            # | ? / !
+            # default
+            lassign [$self parse-type-dflag-default $varSpec text] \
+                typeName defaultingMode defaultValue
+            dict set dict $varName \
+                [dict create type $typeName dflag $defaultingMode \
+                     default $defaultValue]
+        }
+        set dict
+    }
+
+    method parse-type-dflag-default {varSpec default} {
+        if {[regexp -indices {[|/?!]} $varSpec match]} {
+            lassign $match matchBegin
+            list [string-or \
+                      [string range $varSpec 0 [expr {$matchBegin-1}]] \
+                      $default] \
+                [string range $varSpec {*}$match] \
+                [string range $varSpec [expr {$matchBegin+1}] end]
+        } else {
+            set default
+        }
+    }
+
     method {re decls} {} {
         set reNS [join $options(-namespace-list) |]
         string map [list @NS@ (?:$reNS)] {(?x)
@@ -167,8 +199,8 @@ snit::type yatt_tcl {
                         set curPartName [list $declKind ""]
                     }
                     :page - :widget - :action {
+                        set attList [lassign $attList partName]
                         set declKind [string range $declType 1 end]
-                        set attArgs [lassign $attList partName]
                         set curPartName [list $declKind $partName]
                     }
                     default {
@@ -177,7 +209,8 @@ snit::type yatt_tcl {
                 }
                 dict update result $curPartName curPart {
                     dict set curPart kind $declKind
-                    dict set curPart atts $attList
+                    dict set curPart atts \
+                        [$self build-arg-decls [$self parse-attlist $attList]]
                 }
             } elseif {$declOrCmmt ne ""} {
                 error "Really? $declOrCmmt"
@@ -185,7 +218,6 @@ snit::type yatt_tcl {
         }
         set result
     }
-    
 
     option -debug 0
     option -debug-fh stdout
@@ -280,6 +312,14 @@ snit::type yatt_tcl {
             if {[lindex $match 0] < 0} continue
             return [list $typeVar [string range $string {*}$match]]
         }
+    }
+
+    proc string-or {str args} {
+	foreach str [list $str {*}$args] {
+	    if {$str ne ""} {
+		return $str
+	    }
+	}
     }
 
     option -encoding utf-8
