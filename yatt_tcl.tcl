@@ -128,26 +128,60 @@ snit::type yatt_tcl {
     method generate-call {tok transCtx} {
         # XXX: body is not yet used
         # XXX: $this is passed
-        lassign $tok _ tag_and_args body
+        lassign $tok _ tag_and_args bodyToks
         set actualArgs [lassign $tag_and_args widgetName]
         regsub {^\w+:} $widgetName {} widgetName
         
         if {[set codeVar [$self transcontext find-callable-var $transCtx $widgetName]] ne ""} {
             list uplevel 1 \$$codeVar
         } elseif {[set widgetDecl [$self transcontext find-widget $transCtx $widgetName]] ne ""} {
-            set formalArgs [dict get $widgetDecl atts]
-            set cmd [list render__$widgetName]
-            foreach argName [dict keys $formalArgs] {
-                set argSpec [dict get $formalArgs $argName]
-                
+            set callArgs [dict get $widgetDecl atts]
+            foreach argTok $actualArgs {
+                if {[llength $argTok] == 2} {
+                    lassign $argTok argName argValue
+                } else {
+                    set argName [lindex $argTok 0]
+                    if {[info exists argValue]} {unset argValue}
+                }
+                if {![dict exists $callArgs $argName]} {
+                    error "Unknown argument '$argName' for widget $widgetName"
+                }
+                dict set callArgs $argName actual \
+                    [if {[info exists argValue]} {
+                        $self gen-as-[dict get $callArgs $argName type] \
+                            $argValue $transCtx
+                    } else {
+                        # argument pass-thru
+                        if {[$self transcontext find-var $transCtx $argName] eq ""} {
+                            error "No such variable: $argName"
+                        }
+                        value \$$argName
+                    }]
             }
-            set cmd
-            list render__$widgetName $formalArgs $actualArgs
+            
+            if {$bodyToks ne ""} {
+                # XXX:
+                dict set callArgs body actual $bodyToks
+            }
+
+            set argList [lmap argSpec [dict values $callArgs] {
+                if {[dict exists $argSpec actual]} {
+                    dict get $argSpec actual
+                } elseif {[dict get $argSpec dflag] eq "!"} {
+                    error "Argument [dict get $argSpec name] is missing!"
+                } else {
+                    value {}
+                }
+            }]
+            return "render__$widgetName [join $argList]"
         } else {
             error "No such widget: $widgetName. ctx=($transCtx)"
         }
     }
 
+    method gen-as-text {string transCtx} {
+        list $string
+    }
     method gen-emittable-text string {
         string map [list @VAL@ $string] {[escape @VAL@]}
     }
@@ -242,7 +276,7 @@ snit::type yatt_tcl {
                 typeName defaultingMode defaultValue
             dict set dict $varName \
                 [dict create type $typeName dflag $defaultingMode \
-                     default $defaultValue]
+                     default $defaultValue name $varName]
         }
         if {![dict exists $dict body]} {
             dict set dict body \
@@ -440,5 +474,6 @@ snit::type yatt_tcl {
 		       [list apply [list args $command]]]
     }
 
+    proc value value {set value}
 }
 

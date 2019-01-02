@@ -5,7 +5,9 @@
 
 &yatt:y;
 
-<yatt:baz x y/>
+<yatt:baz x y="bar" z>
+  hoehoe
+</yatt:baz>
 
 
 <?tcl
@@ -17,7 +19,7 @@
 <!yatt:page bar a b>
 <h2>bar</h2>
 
-<yatt:baz x>
+<yatt:baz x=a>
   <h2>&yatt:x;</h2>
   <yatt:qux>
     hoehoe
