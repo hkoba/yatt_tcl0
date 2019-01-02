@@ -135,7 +135,7 @@ snit::type yatt_tcl {
         regsub {^\w+:} $widgetName {} widgetName
         
         if {[set codeVar [$self transcontext find-callable-var $transCtx $widgetName]] ne ""} {
-            list uplevel 1 \$$codeVar
+            return "uplevel 1 \$[dict get $codeVar name]"
         } elseif {[set widgetDecl [$self transcontext find-widget $transCtx $widgetName]] ne ""} {
             set callArgs [dict get $widgetDecl atts]
             foreach argTok $actualArgs {
@@ -162,8 +162,8 @@ snit::type yatt_tcl {
             }
             
             if {$bodyToks ne ""} {
-                # XXX:
-                dict set callArgs body actual $bodyToks
+                dict set callArgs body actual \
+                    [list [join [$self generate $transCtx $bodyToks] {; }]]
             }
 
             set argList [lmap argSpec [dict values $callArgs] {
@@ -282,7 +282,7 @@ snit::type yatt_tcl {
         }
         if {![dict exists $dict body]} {
             dict set dict body \
-                [dict create type code dflag "" default ""]
+                [dict create name body type code dflag "" default ""]
         }
         set dict
     }
