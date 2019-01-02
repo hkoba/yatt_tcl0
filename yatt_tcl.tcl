@@ -224,8 +224,6 @@ snit::type yatt_tcl {
         concat {$CON write } $expr
     }
     method generate-call {tok transCtx} {
-        # XXX: body is not yet used
-        # XXX: $this is passed
         lassign $tok _ tag_and_args bodyToks
         set actualArgs [lassign $tag_and_args widgetName]
         regsub {^\w+:} $widgetName {} widgetName
