@@ -59,8 +59,6 @@ snit::type yatt_tcl {
         }
     }
 
-    method transpile-page {partName declRec transCtx} {
-        $self transpile-widget $partName $declRec $transCtx
     }
     method transpile-widget {partName declRec transCtx} {
         set scriptBody []
@@ -229,7 +227,8 @@ snit::type yatt_tcl {
     }
     method parse-decllist html {
         set result [dict create]
-        set curPartName [list page ""]
+        set curPartName [list widget ""]
+        set otherSpec [list public yes]
         foreach {text declOrCmmt} [textutil::splitx $html [$self re decls]] {
             if {$text ne ""} {
                 dict update result $curPartName curPart {
@@ -244,16 +243,18 @@ snit::type yatt_tcl {
                 # XXX: <!yatt:args>
                 switch $declType {
                     :args {
-                        set declKind page
+                        set declKind widget
                         set curPartName [list $declKind ""]
                         if {[dict exists $result $curPartName atts]} {
                             error "!yatt:args must appear only once!"
                         }
+                        set otherSpec [list public yes]
                     }
                     :page - :widget - :action {
                         set attList [lassign $attList partName]
-                        set declKind [string range $declType 1 end]
+                        set declKind [string range [expr {$declType eq ":action" ? $declType : ":widget"}] 1 end]
                         set curPartName [list $declKind $partName]
+                        set otherSpec [list public [expr {$declType ne ":widget"}]]
                     }
                     default {
                         error "Unknown decltype $declType"
@@ -263,6 +264,9 @@ snit::type yatt_tcl {
                     dict set curPart kind $declKind
                     dict set curPart atts \
                         [$self build-arg-decls $attList]
+                    foreach {k v} $otherSpec {
+                        dict set curPart $k $v
+                    }
                 }
             } elseif {$declOrCmmt ne ""} {
                 error "Really? $declOrCmmt"
