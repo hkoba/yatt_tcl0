@@ -244,6 +244,10 @@ snit::type yatt_tcl {
                 [dict create type $typeName dflag $defaultingMode \
                      default $defaultValue]
         }
+        if {![dict exists $dict body]} {
+            dict set dict body \
+                [dict create type code dflag "" default ""]
+        }
         set dict
     }
 
