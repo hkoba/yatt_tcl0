@@ -222,8 +222,11 @@ snit::type yatt_tcl {
                         }
                         break
                     } else {
-                        # <yatt:foo />
+                        # XXX: TODO: element style attribute! such as :yatt:else
+
+                        # For <yatt:foo />
                         set emptyElem [regsub {/$} $tagSpec {} tagSpec]
+
                         regexp {^(\w+(?::\w+)+)(.*)} $tagSpec -> tagName rawAtts
 
                         set attList [$self parse-attlist $rawAtts]
