@@ -195,50 +195,91 @@ snit::type yatt_tcl {
         }
     }
 
-    # XXX: Incompatible with yatt_lite.
+    # yt parse-attlist { x = "foobar" y='bar' z "foo"}
     method parse-attlist string {
         $self debugLevel 1 "orig=($string)"
 	set result {}
+        set queue []
+        set flushProc [list apply {{resultVar queueVar} {
+            upvar 1 $resultVar result
+            upvar 1 $queueVar queue
+            if {![llength $queue]} return
+            lassign [lindex $queue 0] type text
+            set queue []
+            if {$type eq "IDENT"} {
+                # Flush as queued match as value-less attName
+                lappend result [list $text]
+            } else {
+                # Flush as queued match as nameless-attValue
+                lappend result [list "" $text]
+            }
+        }} result queue]
+
 	for {
 	    set start 0
 	} {$start < [string length $string] &&
 	   [regexp -expanded -indices -start $start {
-	       (?:(\w+)\s*=\s*)?
-               (?:"([^\"]*)" | '([^\']*)' | ([^\"\'\>/\s]+))
-	   } $string all name dquo quot bare]} {
-	    set start [lindex $all end]
+	       \A (?: (\s+) | (=) | (\w+) | "([^\"]*)" | '([^\']*)' | ([^\"\'\>/\s=]+))
+	   } $string ALL \
+                SPC EQUAL IDENT DQUO QUOT BARE]} {
+	    set start [lindex $ALL end]
 	    incr start
-            $self debugLevel 1 "all=([string-tuple $string $all]).next=([string range $string $start end])"
+            $self debugLevel 1 "matched=([extract-match $string $ALL]).next=([string range $string $start end]), queue=($queue), result=($result)"
 	} {
-	    if {![lappend-nonempty-tuple result $string $name]} {
-                lappend result ""
+            if {[is-nonempty-match $SPC]} continue
+            
+            if {[is-nonempty-match $EQUAL]} {
+                if {[llength $queue] != 1} {
+                    error "Invalid '=' in pos=[lindex $EQUAL 0], whole attlist=[list $string]"
+                } 
+                lassign [lindex $queue 0] type text
+                if {$type eq "IDENT"} {
+                    lappend queue =
+                } else {
+                    # Flush as queued match as nameless-attValue
+                    set queue []
+                    lappend result [list "" $text]
+                }
+            } else {
+                set typedMatch [extract-typed-match $string IDENT DQUO QUOT BARE]
+
+                switch [llength $queue] {
+                    0 {
+                        lappend queue $typedMatch
+                    }
+                    1 {
+                        {*}$flushProc
+                        lappend queue $typedMatch
+                    }
+                    2 {
+                        # In this case, queue[0] must be an IDENT
+                        lassign [lindex $queue 0] - attName
+                        lassign $typedMatch - attValue
+                        set queue []
+                        lappend result [list $attName $attValue]
+                    }
+                    default {
+                        error "Really? start=$start, queue=$queue, typedMatch=$typedMatch"
+                    }
+                }
             }
-	    or {
-		lappend-nonempty-tuple result $string $dquo
-	    } {
-		lappend-nonempty-tuple result $string $quot
-	    } {
-		lappend-nonempty-tuple result $string $bare
-	    }
 	}
+        {*}$flushProc
 	set result
     }
-    proc lappend-nonempty-tuple {listVar string tuple} {
-	upvar 1 $listVar list
-	if {[lindex $tuple 0] < 0} {
-	    return 0
-	}
-	lappend list [string-tuple $string $tuple]
-	return 1
+    proc is-nonempty-match match {
+        expr {[lindex $match 0] >= 0}
     }
-    proc or args {
-	foreach cmd $args {
-	    if {[uplevel 1 $cmd]} break
-	}
+    proc extract-match {string match} {
+	if {[lindex $match 0] < 0} return
+	string range $string {*}$match
     }
-    proc string-tuple {string tuple} {
-	if {[lindex $tuple 0] < 0} return
-	string range $string {*}$tuple
+    proc extract-typed-match {string typeVar args} {
+        foreach typeVar [list $typeVar {*}$args] {
+            upvar 1 $typeVar match
+            if {[lindex $match 0] < 0} continue
+            return [list $typeVar [string range $string {*}$match]]
+        }
     }
 
     option -encoding utf-8
