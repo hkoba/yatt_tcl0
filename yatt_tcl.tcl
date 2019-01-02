@@ -6,8 +6,9 @@ package require textutil
 
 snit::type yatt_tcl {
     option -doc-root
-    option -namespace-list [list yatt tcl]
+    option -yatt-namespace-list [list yatt tcl]
     option -template-ext .html
+    option -tcl-namespace {}
     
     variable myCompileCache -array []
     
@@ -25,9 +26,15 @@ snit::type yatt_tcl {
         set mtime [file mtime $fn]
         set declDict [$self parse-decllist [$self read_file $fn]]
         set script [$self transpile $declDict]
-        set myCompileCache($fn) [dict create mtime $mtime \
-                                     declDict $declDict script $script]
-        set script
+        set fileNS [join [list $options(-tcl-namespace) $widgetName] ::]
+        # apply [list {__NS__ __FILE__ __SCRIPT__} {
+        #     info script $__FILE__
+        #     namespace eval $__NS__ $__SCRIPT__
+        # }] $fileNS $fn $script
+        dict create mtime $mtime \
+            declDict $declDict\
+            namespace $fileNS \
+            script $script
     }
 
     method transpile {declDict} {
@@ -189,7 +196,7 @@ snit::type yatt_tcl {
     }
 
     method {re body} {} {
-        set reNS [join $options(-namespace-list) |]
+        set reNS [join $options(-yatt-namespace-list) |]
         string map [list @NS@ (?:$reNS)] {(?x)
             ((?: & @NS@ :
               [\w\-\.:\(\$\)\[\]]+
@@ -304,7 +311,7 @@ snit::type yatt_tcl {
     }
 
     method {re decls} {} {
-        set reNS [join $options(-namespace-list) |]
+        set reNS [join $options(-yatt-namespace-list) |]
         string map [list @NS@ (?:$reNS)] {(?x)
             (<! @NS@ :[^>]+>\n
             |
@@ -480,5 +487,29 @@ snit::type yatt_tcl {
     }
 
     proc value value {set value}
+
+    proc parsePosixOpts {varName {dict {}}} {
+        upvar 1 $varName opts
+
+        for {} {[llength $opts]
+                && [regexp {^--?([\w\-]+)(?:(=)(.*))?} [lindex $opts 0] \
+                        -> name eq value]} {set opts [lrange $opts 1 end]} {
+            if {$eq eq ""} {
+                set value 1
+            }
+            dict set dict -$name $value
+        }
+        set dict
+    }
+
 }
 
+if {![info level] && [info script] eq $::argv0} {
+    apply {{} {
+
+        yatt_tcl yt {*}[yatt_tcl::parsePosixOpts ::argv]
+
+        puts [yt {*}$::argv]
+
+    }}
+}

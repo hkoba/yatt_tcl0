@@ -20,7 +20,7 @@
 <h2>bar</h2>
 
 <yatt:baz x=a>
-  <h2>&yatt:x;</h2>
+  <h2>&yatt:a;</h2>
   <yatt:qux>
     hoehoe
   </yatt:qux>
@@ -28,6 +28,8 @@
 
 <!yatt:widget baz x y z>
 <h2>baz</h2>
+
+<yatt:body/>
 
 <!yatt:widget qux x>
 <h2>qux &yatt:x;</h2>
