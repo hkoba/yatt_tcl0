@@ -4,37 +4,126 @@
 package require snit
 package require textutil
 
+namespace eval yatt_tcl {
+    snit::type outbuf {
+        variable myBuffer
+        method write args {
+            append myBuffer {*}$args
+        }
+        method value {} {
+            set myBuffer
+        }
+    }
+    
+    proc escape text {
+        string map {< &lt; > &gt; & &amp; \" &quot;} $text
+    }
+}
+
 snit::type yatt_tcl {
     option -doc-root
     option -yatt-namespace-list [list yatt tcl]
     option -template-ext .html
     option -tcl-namespace {}
     
-    variable myCompileCache -array []
+    variable myCompileCache [dict create]
     
-    method render {widgetName argDict} {
-        set widgetPath [split $widgetName :]
+    method render {widgetName args} {
+        if {[llength $args] % 2 != 0} {
+            error "Odd number of arguments!"
+        }
         
-        if {[$self is-compiled $widgetPath]} {
-            
+        set CON [yatt_tcl::outbuf $self.%AUTO%]
+        scope_guard CON [list rename $CON ""]
+        $self render_into $CON $widgetName $args
+        
+        $CON value
+    }
+    
+    method render_into {CON widgetName argDict} {
+
+        # widgetSpec = widgetDecl + fileSpec
+        if {[set widgetSpec [$self find-widget-spec $widgetName]] eq ""} {
+            error "No such widget: $widgetName"
+        }
+        
+        set callArgs [dict get $widgetSpec atts]
+        foreach argName [dict keys $argDict] {
+            if {![dict exists $callArgs]} {
+                error "Unknown argument! $argName"
+            }
+            dict set callArgs $argName actual \
+                [dict get $argDict $argName]
+        }
+        
+
+        set widgetProc [dict get $widgetSpec namespace]::[dict get $widgetSpec proc]
+        $widgetProc $CON {*}[$self gen-actual-callargs $callArgs]
+    }
+    
+    method find-widget-spec {widgetName {ensure_transpiled 1}} {
+        set innerName [lassign [split $widgetName :] tmplName]
+
+        $self update-template-cache $tmplName
+        
+        dict update myCompileCache $tmplName tmplRec {
+
+            if {$ensure_transpiled && ![dict get $tmplRec transpiled]} {
+
+                set script [$self transpile [dict get $tmplRec parts]]
+                apply [list {__NS__ __FILE__ __SCRIPT__} {
+                    info script $__FILE__
+                    namespace eval $__NS__ $__SCRIPT__
+                }] [dict get $tmplRec namespace] \
+                    [dict get $tmplRec filename] \
+                    $script
+
+                dict set tmplRec transpiled 1
+            } else {
+                error "not evaled"
+            }
+
+            dict merge \
+                [dict get $tmplRec parts [list widget $innerName]] \
+                [dict filter $tmplRec \
+                     key namespace filename]
         }
 
     }
-    
-    method generate-script {widgetName} {
-        set fn $options(-doc-root)/$widgetName$options(-template-ext)
+
+    method update-template-cache tmplName {
+        set fn $options(-doc-root)/$tmplName$options(-template-ext)
+
         set mtime [file mtime $fn]
+        if {[dict exists $myCompileCache $tmplName]
+            &&
+            $mtime == [dict get $myCompileCache $tmplName mtime]} {
+            
+            return 0
+        }
+
         set declDict [$self parse-decllist [$self read_file $fn]]
-        set script [$self transpile $declDict]
-        set fileNS [join [list $options(-tcl-namespace) $widgetName] ::]
-        # apply [list {__NS__ __FILE__ __SCRIPT__} {
-        #     info script $__FILE__
-        #     namespace eval $__NS__ $__SCRIPT__
-        # }] $fileNS $fn $script
-        dict create mtime $mtime \
-            declDict $declDict\
-            namespace $fileNS \
-            script $script
+        set fileNS [join [list $options(-tcl-namespace) $tmplName] ::]
+
+        dict set myCompileCache $tmplName \
+            [dict create \
+                 mtime $mtime \
+                 filename $fn \
+                 namespace $fileNS \
+                 parts $declDict \
+                 transpiled 0 \
+                ]
+        
+        # updated
+        return 1
+    }
+
+    # For debugging aid only.
+    method generate-script {tmplName} {
+        
+        $self update-template-cache $tmplName
+
+        $self transpile [dict get $myCompileCache $tmplName parts]
     }
 
     method transpile {declDict} {
@@ -173,18 +262,22 @@ snit::type yatt_tcl {
                     [list [join [$self generate $transCtx $bodyToks] {; }]]
             }
 
-            set argList [lmap argSpec [dict values $callArgs] {
-                if {[dict exists $argSpec actual]} {
-                    dict get $argSpec actual
-                } elseif {[dict get $argSpec dflag] eq "!"} {
-                    error "Argument [dict get $argSpec name] is missing!"
-                } else {
-                    value {}
-                }
-            }]
-            return "render__$widgetName [join $argList]"
+            set argList [$self gen-actual-callargs $callArgs]
+            return "render__$widgetName \$CON [join $argList]"
         } else {
             error "No such widget: $widgetName. ctx=($transCtx)"
+        }
+    }
+
+    method gen-actual-callargs callArgs {
+        lmap argSpec [dict values $callArgs] {
+            if {[dict exists $argSpec actual]} {
+                dict get $argSpec actual
+            } elseif {[dict get $argSpec dflag] eq "!"} {
+                error "Argument [dict get $argSpec name] is missing!"
+            } else {
+                value {}
+            }
         }
     }
 
@@ -192,7 +285,7 @@ snit::type yatt_tcl {
         list $string
     }
     method gen-emittable-text string {
-        string map [list @VAL@ $string] {[escape @VAL@]}
+        string map [list @VAL@ $string] {[yatt_tcl::escape @VAL@]}
     }
 
     method {re body} {} {
@@ -338,6 +431,7 @@ snit::type yatt_tcl {
                     :args {
                         set declKind widget
                         set curPartName [list $declKind ""]
+                        set procPrefix  render__
                         if {[dict exists $result $curPartName atts]} {
                             error "!yatt:args must appear only once!"
                         }
@@ -346,6 +440,7 @@ snit::type yatt_tcl {
                     :page - :widget - :action {
                         set attList [lassign $attList partName]
                         set declKind [string range [expr {$declType eq ":action" ? $declType : ":widget"}] 1 end]
+                        set procPrefix [expr {$declKind eq "widget" ? "render__" : "do__"} ]
                         set curPartName [list $declKind $partName]
                         set otherSpec [list public [expr {$declType ne ":widget"}]]
                     }
@@ -355,6 +450,7 @@ snit::type yatt_tcl {
                 }
                 dict update result $curPartName curPart {
                     dict set curPart kind $declKind
+                    dict set curPart proc $procPrefix[lindex $curPartName end]
                     dict set curPart atts \
                         [$self build-arg-decls $attList]
                     foreach {k v} $otherSpec {
