@@ -46,7 +46,10 @@ snit::type yatt_tcl {
         set declRec [dict get $declDict $partSpec]
         lassign $partSpec kind partName
         dict create \
-            root [dict create kind $kind name $partName] \
+            container $declDict \
+            widget [dict merge \
+                         $declRec \
+                        [dict create kind $kind name $partName]]\
             scope [list [dict get $declRec atts] [dict create]]
         # XXX: filename lineno
     }
