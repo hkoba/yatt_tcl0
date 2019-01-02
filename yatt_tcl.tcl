@@ -22,28 +22,51 @@ snit::type yatt_tcl {
     
     method generate-script {widgetName} {
         set fn $options(-doc-root)/$widgetName$options(-template-ext)
+        set mtime [file mtime $fn]
         set declDict [$self parse-decllist [$self read_file $fn]]
-        $self transpile $declDict
+        set script [$self transpile $declDict]
+        set myCompileCache($fn) [dict create mtime $mtime \
+                                     declDict $declDict script $script]
+        set script
     }
 
     method transpile {declDict} {
         set script []
         foreach partSpec [dict keys $declDict] {
             lassign $partSpec kind partName
+            set transCtx [$self transcontext create $declDict $partSpec]
             append script [$self transpile-$kind $partName \
                                [dict get $declDict $partSpec] \
-                               $declDict]
+                               $transCtx]
         }
         set script
     }
 
-    method transpile-page {partName declRec fileDecl} {
-        $self transpile-widget $partName $declRec $fileDecl
+    method {transcontext create} {declDict partSpec} {
+        set declRec [dict get $declDict $partSpec]
+        lassign $partSpec kind partName
+        dict create \
+            root [dict create kind $kind name $partName] \
+            scope [list [dict get $declRec atts] [dict create]]
+        # XXX: filename lineno
     }
-    method transpile-widget {partName declRec fileDecl} {
+
+    method {transcontext lookup} {transCtx varName} {
+        foreach varDict [lreverse [dict get $transCtx scope]] {
+            if {[dict exists $varDict $varName]} {
+                return [dict get $varDict $varName]
+            }
+        }
+    }
+
+    method transpile-page {partName declRec transCtx} {
+        $self transpile-widget $partName $declRec $transCtx
+    }
+    method transpile-widget {partName declRec transCtx} {
         set scriptBody []
+        $self debugLevel 2 "partName=$partName, declRec=($declRec)"        
         foreach tok [$self parse-body [dict get $declRec source]] {
-            lappend scriptBody [$self generate $tok]
+            lappend scriptBody [$self generate $tok $transCtx]
         }
         set argList [list CON]
         set argDict [dict get $declRec atts]
@@ -62,24 +85,25 @@ snit::type yatt_tcl {
         }
         return "; proc render__$partName [list $argList] {[join $scriptBody {; }]}"
     }
-    method transpile-action {partName declRec fileDecl} {}
+    method transpile-action {partName declRec transCtx} {}
 
-    method generate tok {
-        $self generate-[lindex $tok 0] $tok
+    method generate {tok transCtx} {
+        $self generate-[lindex $tok 0] $tok $transCtx
     }
-    method generate-text tok {
+    method generate-text {tok transCtx} {
         set text [lindex $tok 1]
         return "\$CON write [list $text]"
     }
-    method generate-pi tok {
+    method generate-pi {tok transCtx} {
+        # ?tcl=は？
         lindex $tok 1
     }
-    method generate-entity tok {
+    method generate-entity {tok transCtx} {
         # XXX: entpath is not yet supported
         set varName [regsub ^: [lindex $tok 1] {}]
         string map [list @VAR@ $varName] {$CON write [escape $@VAR@]}
     }
-    method generate-call tok {
+    method generate-call {tok transCtx} {
         # XXX: body is not yet used
         # XXX: $this is passed
         lassign $tok _ tag_and_args body
