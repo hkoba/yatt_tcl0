@@ -62,7 +62,23 @@ snit::type yatt_tcl {
         }
     }
 
+    method {transcontext find-callable-var} {transCtx varName} {
+        if {[set varSpec [$self transcontext find-var $transCtx $varName]] eq ""} return
+        if {[dict get $varSpec type] eq "code"} {
+            return $varSpec
+        }
     }
+
+    method {transcontext find-widget} {transCtx widgetName} {
+        # XXX: widgetPath (yatt:foo:bar)
+        set partSpec [list widget $widgetName]
+        if {[dict exists $transCtx container $partSpec]} {
+            return [dict get $transCtx container $partSpec]
+        } else {
+            # XXX: other file
+        }
+    }
+
     method transpile-widget {partName declRec transCtx} {
         set scriptBody []
         $self debugLevel 2 "partName=$partName, declRec=($declRec)"        
