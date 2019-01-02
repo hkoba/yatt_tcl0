@@ -147,17 +147,27 @@ snit::type yatt_tcl {
                 }
                 tag {
                     set tagSpec [lindex $tok 1]
-                    if {[regsub ^/ [lindex $tagSpec 0] {} tag]} {
+                    if {[regsub ^/ $tagSpec {} tag]} {
                         if {$tag ne $outerTag} {
                             error "Tag $outerTag is closed by $tag"
                         }
                         break
-                    } elseif {[regsub {/$} $tagSpec {} tagSpec]} {
-                        # <yatt:foo />
-                        lappend result [list call $tagSpec]
                     } else {
-                        # <yatt:foo> ... </yatt:foo>
-                        lappend result [list call $tagSpec [$self organize-body tokList [lindex $tagSpec 0]]]
+                        # <yatt:foo />
+                        set emptyElem [regsub {/$} $tagSpec {} tagSpec]
+                        regexp {^(\w+(?::\w+)+)(.*)} $tagSpec -> tagName rawAtts
+
+                        set attList [$self parse-attlist $rawAtts]
+                        # Drop yatt: first.
+                        set tagPath [lrange [split $tagName :] 1 end]
+
+                        set callTok [list call [list $tagPath {*}$attList]]
+                        
+                        if {!$emptyElem} {
+                            lappend callTok [$self organize-body tokList $tagName]
+                        }
+                        
+                        lappend result $callTok
                     }
                 }
             }
