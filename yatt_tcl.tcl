@@ -51,7 +51,7 @@ snit::type yatt_tcl {
         # XXX: filename lineno
     }
 
-    method {transcontext lookup} {transCtx varName} {
+    method {transcontext find-var} {transCtx varName} {
         foreach varDict [lreverse [dict get $transCtx scope]] {
             if {[dict exists $varDict $varName]} {
                 return [dict get $varDict $varName]
@@ -101,7 +101,7 @@ snit::type yatt_tcl {
     method generate-entity {tok transCtx} {
         # XXX: entpath is not yet supported
         set varName [regsub ^: [lindex $tok 1] {}]
-        if {[set varSpec [$self transcontext lookup $transCtx $varName]] eq ""} {
+        if {[set varSpec [$self transcontext find-var $transCtx $varName]] eq ""} {
             error "No such variable: $varName ($transCtx)"
         }
         set expr [$self gen-emittable-[dict get $varSpec type] \
