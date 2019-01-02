@@ -197,6 +197,9 @@ snit::type yatt_tcl {
                     :args {
                         set declKind page
                         set curPartName [list $declKind ""]
+                        if {[dict exists $result $curPartName atts]} {
+                            error "!yatt:args must appear only once!"
+                        }
                     }
                     :page - :widget - :action {
                         set attList [lassign $attList partName]
