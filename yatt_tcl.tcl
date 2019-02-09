@@ -23,7 +23,7 @@ namespace eval yatt_tcl {
 snit::type yatt_tcl {
     option -doc-root
     option -yatt-namespace-list [list yatt tcl]
-    option -template-ext .html
+    option -template-ext .ytcl
     option -tcl-namespace {}
     
     variable myCompileCache [dict create]
