@@ -28,6 +28,24 @@ snit::type yatt_tcl {
     
     variable myCompileCache [dict create]
     
+    method render_file {fileName args} {
+        if {[llength $args] % 2 != 0} {
+            error "Odd number of arguments!"
+        }
+        if {[file extension $fileName] ne $options(-template-ext)} {
+            error "Unsupported file type: [file extension $fileName]"
+        }
+        if {$options(-doc-root) ne ""} {
+            set fileName [file normalize $fileName]
+            if {![string equal -length [string length $options(-doc-root)] \
+                      $options(-doc-root) $fileName]} {
+                error "Requested file is outside of doc-root '$options(-doc-root)': $fileName"
+            }
+        }
+
+        $self render [file rootname $fileName] {*}$args
+    }
+
     method render {widgetName args} {
         if {[llength $args] % 2 != 0} {
             error "Odd number of arguments!"
