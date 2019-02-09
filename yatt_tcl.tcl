@@ -21,13 +21,18 @@ namespace eval yatt_tcl {
 }
 
 snit::type yatt_tcl {
-    option -doc-root
     option -yatt-namespace-list [list yatt tcl]
     option -template-ext .ytcl
     option -tcl-namespace {}
     
     variable myCompileCache [dict create]
     
+    option -template-dirs []
+    variable myTemplateDirList []
+    onconfigure -template-dirs list {
+        set myTemplateDirList $list
+    }
+
     method render_file {fileName args} {
         if {[llength $args] % 2 != 0} {
             error "Odd number of arguments!"
@@ -35,15 +40,14 @@ snit::type yatt_tcl {
         if {[file extension $fileName] ne $options(-template-ext)} {
             error "Unsupported file type: [file extension $fileName]"
         }
-        if {$options(-doc-root) ne ""} {
-            set fileName [file normalize $fileName]
-            if {![string equal -length [string length $options(-doc-root)] \
-                      $options(-doc-root) $fileName]} {
-                error "Requested file is outside of doc-root '$options(-doc-root)': $fileName"
-            }
+
+        if {[lsearch -exact $myTemplateDirList \
+                 [set theDir [file dirname [file normalize $fileName]]]] < 0} {
+            set myTemplateDirList \
+                [linsert $myTemplateDirList 0 $theDir]
         }
 
-        $self render [file rootname $fileName] {*}$args
+        $self render [file rootname [file tail $fileName]] {*}$args
     }
 
     method render {widgetName args} {
@@ -110,14 +114,24 @@ snit::type yatt_tcl {
     }
 
     method update-template-cache tmplName {
-        set fn $options(-doc-root)/$tmplName$options(-template-ext)
 
-        set mtime [file mtime $fn]
-        if {[dict exists $myCompileCache $tmplName]
-            &&
-            $mtime == [dict get $myCompileCache $tmplName mtime]} {
-            
-            return 0
+        foreach dir $myTemplateDirList {
+            # puts [list dir $dir tmplName $tmplName ext $options(-template-ext)]
+            set fn $dir/$tmplName$options(-template-ext)
+
+            if {![file exists $fn]} continue
+
+            set mtime [file mtime $fn]
+            if {[dict exists $myCompileCache $tmplName]
+                &&
+                $mtime == [dict get $myCompileCache $tmplName mtime]} {
+                
+                return 0
+            }
+        }
+        
+        if {![file exists $fn]} {
+            error "No such template $tmplName"
         }
 
         set fileNS [join [list $options(-tcl-namespace) $tmplName] ::]
