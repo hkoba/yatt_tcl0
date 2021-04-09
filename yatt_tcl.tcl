@@ -493,6 +493,14 @@ snit::type yatt_tcl {
                 error "Really? $declOrCmmt"
             }
         }
+        # Ensure declRec of default (nameless) widget has correct structure
+        dict update result [list widget ""] curPart {
+            if {![dict exists $curPart atts]} {
+                dict set curPart atts {}
+                dict set curPart proc ${nsPrefix}render__
+            }
+        }
+        puts [list parsed-decllist: $result]
         set result
     }
 
